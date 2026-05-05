@@ -1,0 +1,9 @@
+# YOLOv8 Dataset-Konfiguration (Ultralytics)
+# Bilder + Labels nach scripts/prepare_dataset.py unterhalb von path ablegen.
+path: data/kasten_dataset
+train: images/train
+val: images/val
+
+nc: 1
+names:
+  0: bierkasten

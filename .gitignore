@@ -217,5 +217,16 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-#data 
-data/
+# Lokale Trainingsdaten: Bilder/Labels nicht versionieren, leere Ordnerstruktur schon
+data/*
+!data/kasten_dataset/
+!data/kasten_dataset/images/
+!data/kasten_dataset/labels/
+data/kasten_dataset/images/*
+!data/kasten_dataset/images/.gitkeep
+!data/kasten_dataset/images/HINWEIS.txt
+data/kasten_dataset/labels/*
+!data/kasten_dataset/labels/.gitkeep
+
+# YOLO-Läufe und trainierte Gewichte (best.pt ins Team-Laufwerk legen, nicht ins Repo)
+runs/

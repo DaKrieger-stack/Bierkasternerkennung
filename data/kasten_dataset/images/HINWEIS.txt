@@ -1,0 +1,7 @@
+Hier deine Trainingsfotos ablegen (JPG, PNG, …).
+
+Die Label-UI und LabelImg erwarten genau diesen Ordner:
+  data/kasten_dataset/images/
+
+Labels landen parallel unter:
+  data/kasten_dataset/labels/

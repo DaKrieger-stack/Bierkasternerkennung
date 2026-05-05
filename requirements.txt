@@ -4,3 +4,6 @@ torch
 torchvision
 albumentations
 numpy
+streamlit
+streamlit-drawable-canvas
+pillow
