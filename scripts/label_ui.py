@@ -155,6 +155,16 @@ def canvas_objects_to_yolo(
     return lines
 
 
+def normalize_canvas_state(value: object, fallback: dict) -> dict:
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        return json.loads(value)
+    if value is None:
+        return fallback
+    raise TypeError(f"Unsupported canvas state type: {type(value).__name__}")
+
+
 def main() -> None:
     chdir_root()
     st.set_page_config(page_title="Kasten labeln", layout="wide")
@@ -244,7 +254,7 @@ def main() -> None:
     file_canvas = {"version": "4.4.0", "objects": initial_objects}
 
     if buf_canvas not in st.session_state:
-        st.session_state[buf_canvas] = json.dumps(file_canvas)
+        st.session_state[buf_canvas] = file_canvas
 
     # Nach externem Dateizugriff: „Zurücksetzen“ möglich
     col_nav1, col_nav2, col_nav3, col_nav4 = st.columns([1, 1, 2, 4])
@@ -265,10 +275,10 @@ def main() -> None:
             st.rerun()
 
     try:
-        initial_drawing = json.loads(st.session_state[buf_canvas])
-    except json.JSONDecodeError:
-        st.session_state[buf_canvas] = json.dumps(file_canvas)
-        initial_drawing = json.loads(st.session_state[buf_canvas])
+        initial_drawing = normalize_canvas_state(st.session_state[buf_canvas], file_canvas)
+    except (TypeError, json.JSONDecodeError):
+        st.session_state[buf_canvas] = file_canvas
+        initial_drawing = file_canvas
 
     canvas_result = st_canvas(
         fill_color="rgba(255, 165, 0, 0.25)",
@@ -287,8 +297,8 @@ def main() -> None:
         st.session_state[buf_canvas] = canvas_result.json_data
 
     try:
-        data = json.loads(st.session_state[buf_canvas])
-    except json.JSONDecodeError:
+        data = normalize_canvas_state(st.session_state[buf_canvas], file_canvas)
+    except (TypeError, json.JSONDecodeError):
         st.error("Interner Canvas-JSON-Fehler — „Aus Datei neu laden“ nutzen.")
         st.stop()
 

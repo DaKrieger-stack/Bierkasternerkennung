@@ -228,5 +228,9 @@ data/kasten_dataset/images/*
 data/kasten_dataset/labels/*
 !data/kasten_dataset/labels/.gitkeep
 
+*.jpg
+*.png
+
+
 # YOLO-Läufe und trainierte Gewichte (best.pt ins Team-Laufwerk legen, nicht ins Repo)
 runs/
