@@ -1,0 +1,29 @@
+Labeling-Stand (alle Video-Frames)
+==================================
+
+Import: alle 549 Frames aus data/frames/ -> data/kasten_dataset/images/
+Auto-Label: 543 / 549 (scripts/auto_label.py --overwrite, Rot-Detektor)
+Log: data/kasten_dataset/_auto_label_log.txt
+
+Manuell in Label-UI (6 ohne Box):
+  - WhatsApp Video 2026-06-02 at 12.06.40 (1)_frame_0080.jpg
+  - WhatsApp Video 2026-06-02 at 12.06.40 (1)_frame_0250.jpg
+  - WhatsApp Video 2026-06-02 at 12.06.40_frame_0023.jpg
+  - WhatsApp Video 2026-06-02 at 12.06.40_frame_0024.jpg
+  - WhatsApp Video 2026-06-02 at 12.06.40_frame_0046.jpg
+  - WhatsApp Video 2026-06-02 at 12.06.40_frame_0054.jpg
+
+Zusaetzlich (aelterer Split, unveraendert):
+  images/train + labels/train  59 Paare
+  images/val   + labels/val    14 Paare
+
+Label-UI:
+  streamlit run scripts/label_ui.py
+
+Train/Val-Split (erledigt):
+  Train: 435 neue + 59 aeltere = 494 Bilder (images/train)
+  Val:   108 neue + 14 aeltere = 122 Bilder (images/val)
+  6 Frames ohne Label bleiben in images/ (manuell nachziehen)
+
+Training:
+  python scripts/train_yolo.py --epochs 50

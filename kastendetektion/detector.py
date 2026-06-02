@@ -139,6 +139,8 @@ def _resolve_weights(explicit: str | Path | None) -> Path | None:
             return p
 
     for rel in (
+        "runs/detect/runs/detect/kasten-2/weights/best.pt",
+        "runs/detect/runs/detect/kasten/weights/best.pt",
         "runs/detect/kasten/weights/best.pt",
         "runs/detect/train/weights/best.pt",
     ):
