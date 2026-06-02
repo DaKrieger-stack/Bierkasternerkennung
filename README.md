@@ -36,6 +36,7 @@ Die vier Ecken aus dem **YOLO-Rechteck** sind eine **Näherung** für Warp (nich
 - `scripts/prepare_dataset.py` — flache `images/` + `labels/` → `train/` / `val/`
 - `scripts/train_yolo.py` — Fine-Tuning (`epochs` Standard 50)
 - `scripts/verify_labels.py` — prüft YOLO-Labels (Klasse 0, Werte in [0, 1])
+- `scripts/auto_label.py` — **YOLO-Startlabels** per CV (Rot + Kontur-Fallback)
 - `scripts/label_ui.py` — **Streamlit-Oberfläche**: Bilder labeln, Klassen als Dropdown (siehe unten)
 - `labeling/classes.txt` — Klassennamen für die UI (eine Zeile = eine Klasse, ID 0, 1, …)
 - `scripts/camera_demo.py` — Live-Stream mit Overlay
@@ -68,20 +69,32 @@ Trainingsbilder aus dem Kursordner:
 [Dropbox — Trainingsbilder](https://www.dropbox.com/scl/fo/0d5055swt00lm3oemtv30/AA5mTgKvz6-RsGlngpAuu_Y?rlkey=usqutwwa68w591k9ch2frowjw&e=1&st=m6kvlxcf&dl=0)
 
 1. Ordner **`data/kasten_dataset/images/`** nutzen (liegt im Projekt; dort liegen auch `HINWEIS.txt` und `.gitkeep` — **eigene Fotos werden von Git ignoriert**).
-2. Bilder labeln — siehe **[LabelImg Schritt für Schritt](#labelimg-schritt-für-schritt)** unten.
-3. Labels prüfen:
+2. **Start-Labels automatisch erzeugen** (Rot-Kasten-Detektion, bei Bedarf Kontur-Fallback):
+
+```bash
+python scripts/auto_label.py
+# optional: Overlay prüfen
+python scripts/auto_label.py --preview-dir data/kasten_dataset/_auto_preview
+```
+
+Vorhandene `.txt` werden standardmäßig **nicht** überschrieben (`--skip-existing`). Alle neu erzeugen: `python scripts/auto_label.py --overwrite`.
+
+3. **Stichprobe / Korrektur** — fehlgeschlagene oder ungenaue Boxen in der Label-UI oder mit LabelImg nachziehen (siehe unten).
+4. Labels prüfen:
 
 ```bash
 python scripts/verify_labels.py
 ```
 
-4. Split ausführen (im Repo-Root):
+`verify_labels.py` erwartet pro Bild eine gültige `.txt`, sobald ein Kasten sichtbar ist. Bilder ohne erkannte Box nach Schritt 2 manuell labeln oder aus dem Ordner entfernen.
+
+5. Split ausführen (im Repo-Root):
 
 ```bash
 python scripts/prepare_dataset.py
 ```
 
-5. Training:
+6. Training:
 
 ```bash
 python scripts/train_yolo.py --epochs 50
@@ -93,7 +106,7 @@ CLI analog zum Arbeitspaket:
 yolo train model=yolov8n.pt data=kasten.yaml epochs=50
 ```
 
-6. Inferenz mit Gewichten z. B.:
+7. Inferenz mit Gewichten z. B.:
 
 ```bash
 set KASTEN_YOLO_WEIGHTS=runs\detect\kasten\weights\best.pt
@@ -186,6 +199,7 @@ python scripts/train_yolo.py --cache
 | Klassisch Testbild | `python scripts/classical_demo.py pfad/zum/bild.jpg` |
 | Nur Fallback live | `python scripts/camera_demo.py --contour-only` |
 | Eckpunkte loggen | `python scripts/camera_demo.py --log-corners` |
+| Auto-Labels | `python scripts/auto_label.py` |
 | Labels prüfen | `python scripts/verify_labels.py` |
 | Label-Web-UI | `streamlit run scripts/label_ui.py` |
 
