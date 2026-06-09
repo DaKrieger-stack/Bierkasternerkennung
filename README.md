@@ -21,10 +21,11 @@ YOLOv8 ist der übliche Standard für solche Bounding-Box-Aufgaben; das Arbeitsp
 | Eckpunkte + Orientierung | Ecken ja; **Orientierung** als `orientation_deg` beim **Konturpfad** (OpenCV `minAreaRect`); bei **YOLO** aktuell `None` (Achsen-BBox) |
 | Warp Perspective → normierte Draufsicht | Umgesetzt (`kastendetektion/warp_grid.py`: `warp_crate_top_down`) |
 | Grid Mapping 4×5, 20 Slot-Mittelpunkte | Umgesetzt (`grid_slot_centers`) |
-| Stufe 1: Slot voll/leer (Hough, Helligkeit, CNN/SVM) | **Noch nicht** |
-| Stufe 2: Kronkorken / voll-leer (HSV, CNN) | **Noch nicht** |
-| Overlay grün/gelb/rot + Gesamtstatistik | **Noch nicht** |
-| ROI-Datensatz 200–500/Split, 70/15/15, MobileNetV2 | **Noch nicht** (nur Kasten-YOLO-Datenpipeline) |
+| Stufe 1: Slot voll/leer (Helligkeit/Kanten/Hough + CNN) | Umgesetzt (`slot_classifier.py`, klassisch + KI) |
+| Stufe 2: Kronkorken / voll-leer (HSV/Specular + CNN) | Umgesetzt (`cap_classifier.py`, klassisch + KI) |
+| Overlay grün/gelb/rot + Gesamtstatistik | Umgesetzt (`overlay.py`, `scripts/pipeline_demo.py`) |
+| Frame-Stabilisierung | Umgesetzt (`stabilize.py`, Mehrheitsentscheid je Slot) |
+| ROI-Datensatz + CNN-Training (Stufe 1/2) | Tooling umgesetzt (`extract_slot_dataset.py`, `train_slot_cnn.py`, `train_cap_cnn.py`); Training mit eigenen ROIs offen |
 
 Die vier Ecken aus dem **YOLO-Rechteck** sind eine **Näherung** für Warp (nicht die exakte Physik-Oberfläche); für mehr Genauigkeit später echte Oberflächen-Ecken annotieren oder Pose/OBB erweitern.
 
@@ -62,6 +63,81 @@ if result:
 ```
 
 **Erkannte Gewichte (optional):** Umgebungsvariable `KASTEN_YOLO_WEIGHTS` auf `best.pt` setzen, oder `weights_path="..."` übergeben. Suchreihenfolge: Argument → `KASTEN_YOLO_WEIGHTS` → `runs/detect/kasten/weights/best.pt` → `runs/detect/train/weights/best.pt`. Ohne eigene Gewichte wird automatisch der **Kontur-Fallback** genutzt.
+
+## Füllzustand-Pipeline (Stufe 1 + Stufe 2)
+
+Nach der Kastendetektion bestimmt die Pipeline pro Slot den Zustand und erzeugt ein farbcodiertes Overlay:
+
+- **Stufe 1 – Slot belegt/leer** (`kastendetektion/slot_classifier.py`): Kantendichte + Hough-Kreis (klassisch) **oder** CNN (KI).
+- **Stufe 2 – Kronkorken voll/leer** (`kastendetektion/cap_classifier.py`): HSV/Specular-Heuristik (klassisch) **oder** CNN (KI), nur für belegte Slots.
+- **Zustände** (`states.py`): `FULL` = grün (Flasche + Korken), `EMPTY` = gelb (Flasche ohne Korken), `MISSING` = rot (leer).
+
+Beide Stufen kennen `method = "classical" | "ml" | "auto"` (`auto`: KI, wenn Gewichte vorhanden, sonst klassisch). KI-Gewichte über `KASTEN_SLOT_WEIGHTS` / `KASTEN_CAP_WEIGHTS` oder Argument.
+
+```python
+from kastendetektion import CratePipeline, draw_pipeline_overlay
+
+pipe = CratePipeline(slot_method="auto", cap_method="auto")
+analysis = pipe.analyze(frame_bgr)
+if analysis:
+    vis = draw_pipeline_overlay(frame_bgr, analysis)
+    print(analysis.occupied_count, "belegt,", analysis.full_count, "voll")
+```
+
+### Pipeline-Demo
+
+```bash
+# Einzelbild (z. B. synthetischer Testkasten), klassischer Pfad, Ergebnis speichern
+python scripts/pipeline_demo.py --image demo_output/synthetic_crate.png \
+    --slot-method classical --cap-method classical --save demo_output/05_pipeline.png
+
+# Live-Kamera mit Frame-Stabilisierung über 10 Frames
+python scripts/pipeline_demo.py --camera 0 --stabilize 10
+```
+
+### Bedien-UI (Streamlit)
+
+Komfortable Oberfläche zum Bedienen der Pipeline (Bild-Upload oder Kamera, Methode je Stufe umschaltbar, Overlay + Statistik + Slot-Tabelle):
+
+```bash
+streamlit run scripts/app_ui.py
+```
+
+Öffnet sich kein Fenster automatisch, im Browser **http://localhost:8501** aufrufen. In der Seitenleiste:
+
+- "Nur Kontur statt YOLO" abwählen → Detektion läuft über YOLO (`best.pt` per Feld oder `KASTEN_YOLO_WEIGHTS`).
+- "Stufe 1/2" auf `classical` = klassische Methode, auf `ml` = CNN, `auto` = CNN wenn Gewichte vorhanden, sonst klassisch.
+
+### KI-Wege trainieren (Stufe 1/2)
+
+1. Slot-ROIs aus gelabelten Kastenbildern extrahieren:
+
+```bash
+python scripts/extract_slot_dataset.py --images data/kasten_dataset/images
+```
+
+2. ROIs aus `data/slot_dataset/unsorted/` manuell in `empty/`, `bottle_empty/`, `bottle_full/` einsortieren.
+3. Klassifikatoren trainieren (kleines CNN oder MobileNetV2):
+
+```bash
+python scripts/train_slot_cnn.py --epochs 30          # -> models/slot_cnn.pt
+python scripts/train_cap_cnn.py  --epochs 30          # -> models/cap_cnn.pt
+```
+
+4. Inferenz mit KI-Wegen:
+
+```bash
+export KASTEN_SLOT_WEIGHTS=models/slot_cnn.pt
+export KASTEN_CAP_WEIGHTS=models/cap_cnn.pt
+python scripts/pipeline_demo.py --camera 0 --slot-method ml --cap-method ml
+```
+
+### Tests
+
+```bash
+pip install pytest   # Dev-Abhängigkeit
+python -m pytest tests/ -q
+```
 
 ## Daten von Dropbox
 
@@ -202,5 +278,7 @@ python scripts/train_yolo.py --cache
 | Auto-Labels | `python scripts/auto_label.py` |
 | Labels prüfen | `python scripts/verify_labels.py` |
 | Label-Web-UI | `streamlit run scripts/label_ui.py` |
+| Füllzustand-Pipeline | `python scripts/pipeline_demo.py --image demo_output/synthetic_crate.png` |
+| Bedien-UI (Pipeline) | `streamlit run scripts/app_ui.py` |
 
 Voraussetzung für sinnvolles YOLO: zuerst Daten labeln und trainieren; bis dahin liefert die Pipeline den **Canny-Fallback** für erste Demos.
