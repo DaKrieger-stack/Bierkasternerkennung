@@ -53,10 +53,10 @@ def segment_red_hsv(image_bgr: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.n
     """Segmentiert rote Pixel im HSV-Farbraum und verfeinert sie mit Otsu auf der Sättigung."""
     hsv = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2HSV)
 
-    lower_red_1 = np.array([0, 60, 40], dtype=np.uint8)
-    upper_red_1 = np.array([10, 255, 255], dtype=np.uint8)
-    lower_red_2 = np.array([170, 60, 40], dtype=np.uint8)
-    upper_red_2 = np.array([180, 255, 255], dtype=np.uint8)
+    lower_red_1 = np.array([0, 106, 71], dtype=np.uint8)
+    upper_red_1 = np.array([12, 255, 255], dtype=np.uint8)
+    lower_red_2 = np.array([172, 106, 71], dtype=np.uint8)
+    upper_red_2 = np.array([179, 255, 255], dtype=np.uint8)
 
     mask_red_1 = cv2.inRange(hsv, lower_red_1, upper_red_1)
     mask_red_2 = cv2.inRange(hsv, lower_red_2, upper_red_2)
