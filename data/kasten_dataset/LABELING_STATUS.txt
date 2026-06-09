@@ -20,10 +20,12 @@ Zusaetzlich (aelterer Split, unveraendert):
 Label-UI:
   streamlit run scripts/label_ui.py
 
-Train/Val-Split (erledigt):
-  Train: 435 neue + 59 aeltere = 494 Bilder (images/train)
-  Val:   108 neue + 14 aeltere = 122 Bilder (images/val)
+Train/Val-Split (aktuell nach manuellem Loeschen):
+  Train: 121 Bilder (images/train)
+  Val:   31 Bilder (images/val)
   6 Frames ohne Label bleiben in images/ (manuell nachziehen)
 
-Training:
-  python scripts/train_yolo.py --epochs 50
+Letztes Training (09.06.2026):
+  python scripts/train_yolo.py --epochs 50 --name kasten-retrain
+  Gewichte: runs/detect/runs/detect/kasten-retrain/weights/best.pt
+  Val mAP@0.5: ~0.995 (31 Bilder)
