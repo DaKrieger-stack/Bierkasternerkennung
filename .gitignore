@@ -234,3 +234,7 @@ data/kasten_dataset/labels/*
 
 # YOLO-Läufe und trainierte Gewichte (best.pt ins Team-Laufwerk legen, nicht ins Repo)
 runs/
+
+# Trainierte Klassifikator-Gewichte (Stufe 1/2) und sonstige .pt-Modelle
+models/
+*.pt
