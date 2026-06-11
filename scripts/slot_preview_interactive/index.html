@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    .wrap {
+      position: relative;
+      display: inline-block;
+      line-height: 0;
+    }
+    .wrap img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      user-select: none;
+      pointer-events: none;
+    }
+    .marker {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      width: var(--ms, 34px);
+      height: var(--ms, 34px);
+      border-radius: 50%;
+      border: 2px solid #000;
+      color: #fff;
+      font-weight: 700;
+      font-size: var(--fs, 13px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: crosshair;
+      text-shadow: 0 0 3px #000;
+      z-index: 1;
+    }
+    .marker.hover {
+      transform: translate(-50%, -50%) scale(1.18);
+      box-shadow: 0 0 0 3px #fff, 0 0 0 5px #0066cc;
+      z-index: 3;
+    }
+    .hint {
+      margin-top: 6px;
+      font-size: 12px;
+      color: #555;
+      line-height: 1.4;
+    }
+    .hint kbd {
+      padding: 1px 5px;
+      border: 1px solid #bbb;
+      border-radius: 3px;
+      background: #f4f4f4;
+      font-size: 11px;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script src="./streamlit-component-lib.js"></script>
+  <script>
+    const KEY_MAP = { "1": "voll", "2": "leer", "3": "nada" };
+    let labels = [];
+    let hovered = null;
+    let colors = { voll: "#00c800", leer: "#ffd700", nada: "#ff0000" };
+
+    function pushLabels() {
+      Streamlit.setComponentValue(labels.slice());
+    }
+
+    function paint(el, idx) {
+      el.style.background = colors[labels[idx]] || colors.nada;
+    }
+
+    function apply(idx, key) {
+      if (idx === null || idx === undefined) return;
+      labels[idx] = key;
+      const el = document.querySelector('.marker[data-i="' + idx + '"]');
+      if (el) paint(el, idx);
+      pushLabels();
+    }
+
+    document.addEventListener("keydown", (e) => {
+      const key = KEY_MAP[e.key];
+      if (!key || hovered === null) return;
+      e.preventDefault();
+      apply(hovered, key);
+    });
+
+    function render(args) {
+      const root = document.getElementById("root");
+      labels = (args.labels || []).slice();
+      const slots = args.slots || [];
+      const w = args.width || 420;
+      const h = args.height || 320;
+
+      if (args.label_colors) {
+        colors = {};
+        for (const [k, rgb] of Object.entries(args.label_colors)) {
+          colors[k] = "rgb(" + rgb[0] + "," + rgb[1] + "," + rgb[2] + ")";
+        }
+      }
+
+      const ms = Math.max(26, Math.min(42, Math.round(Math.min(w, h) * 0.085)));
+      const fs = Math.max(10, Math.round(ms * 0.38));
+
+      root.innerHTML = "";
+      const wrap = document.createElement("div");
+      wrap.className = "wrap";
+      wrap.style.width = w + "px";
+      wrap.style.height = h + "px";
+      wrap.style.setProperty("--ms", ms + "px");
+      wrap.style.setProperty("--fs", fs + "px");
+
+      const img = document.createElement("img");
+      img.src = "data:image/jpeg;base64," + args.image_b64;
+      img.alt = "Vorschau";
+      wrap.appendChild(img);
+
+      slots.forEach((s) => {
+        const m = document.createElement("div");
+        m.className = "marker";
+        m.dataset.i = String(s.index);
+        m.style.left = s.x + "px";
+        m.style.top = s.y + "px";
+        m.textContent = String(s.index);
+        paint(m, s.index);
+        m.addEventListener("mouseenter", () => {
+          hovered = s.index;
+          m.classList.add("hover");
+        });
+        m.addEventListener("mouseleave", () => {
+          if (hovered === s.index) hovered = null;
+          m.classList.remove("hover");
+        });
+        wrap.appendChild(m);
+      });
+
+      root.appendChild(wrap);
+      const hint = document.createElement("div");
+      hint.className = "hint";
+      hint.innerHTML = "Über Punkt fahren → <kbd>1</kbd> voll · <kbd>2</kbd> leer · <kbd>3</kbd> nada (speichert sofort)";
+      root.appendChild(hint);
+      Streamlit.setFrameHeight(h + 44);
+    }
+
+    Streamlit.events.addEventListener(Streamlit.RENDER_EVENT, (e) => render(e.detail.args));
+    Streamlit.setComponentReady();
+    Streamlit.setFrameHeight(460);
+  </script>
+</body>
+</html>

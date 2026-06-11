@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="de">
+<head><meta charset="utf-8" /></head>
+<body>
+<script src="./streamlit-component-lib.js"></script>
+<script>
+  let activeSlot = 0;
+  const KEY_MAP = { "1": "voll", "2": "leer", "3": "nada" };
+
+  Streamlit.events.addEventListener(Streamlit.RENDER_EVENT, (event) => {
+    activeSlot = event.detail.args.active_slot || 0;
+  });
+  Streamlit.setComponentReady();
+  Streamlit.setFrameHeight(1);
+
+  function shouldIgnoreTarget(el) {
+    if (!el || !el.tagName) return false;
+    const tag = el.tagName.toUpperCase();
+    if (tag === "TEXTAREA") return true;
+    if (tag === "INPUT") {
+      const t = (el.type || "text").toLowerCase();
+      return t === "text" || t === "search" || t === "email" || t === "number";
+    }
+    return false;
+  }
+
+  function onKeyDown(e) {
+    const label = KEY_MAP[e.key];
+    if (!label) return;
+    const doc = window.parent.document;
+    if (shouldIgnoreTarget(doc.activeElement)) return;
+    e.preventDefault();
+    Streamlit.setComponentValue({ slot: activeSlot, label: label });
+  }
+
+  const doc = window.parent.document;
+  if (!doc._slotKeyListenerAttached) {
+    doc._slotKeyListenerAttached = true;
+    doc.addEventListener("keydown", onKeyDown, true);
+  }
+</script>
+</body>
+</html>

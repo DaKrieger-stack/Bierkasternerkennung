@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 6px;
+      max-width: 520px;
+    }
+    .cell {
+      border: 2px solid #333;
+      border-radius: 8px;
+      padding: 8px 4px;
+      text-align: center;
+      cursor: crosshair;
+      min-height: 62px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 2px;
+      transition: transform 0.08s ease, box-shadow 0.08s ease;
+    }
+    .cell.hover {
+      transform: scale(1.06);
+      box-shadow: 0 0 0 3px #fff, 0 0 0 5px #0066cc;
+      z-index: 2;
+    }
+    .num { font-size: 18px; font-weight: 800; color: #fff; text-shadow: 0 0 3px #000; }
+    .lbl { font-size: 11px; font-weight: 600; color: #fff; text-shadow: 0 0 2px #000; }
+    .hint {
+      margin-top: 8px;
+      font-size: 12px;
+      color: #555;
+      max-width: 520px;
+    }
+    .hint kbd {
+      padding: 1px 5px;
+      border: 1px solid #bbb;
+      border-radius: 3px;
+      background: #f4f4f4;
+      font-size: 11px;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script src="./streamlit-component-lib.js"></script>
+  <script>
+    const KEY_MAP = { "1": "voll", "2": "leer", "3": "nada" };
+    let labels = [];
+    let layout = [];
+    let hovered = null;
+    let colors = { voll: "#00c800", leer: "#ffd700", nada: "#ff0000" };
+
+    function pushLabels() {
+      Streamlit.setComponentValue(labels.slice());
+    }
+
+    function paintCell(el, slotIdx) {
+      const key = labels[slotIdx] || "nada";
+      el.style.background = colors[key] || colors.nada;
+      el.querySelector(".lbl").textContent = key;
+    }
+
+    function apply(slotIdx, key) {
+      labels[slotIdx] = key;
+      const el = document.querySelector('.cell[data-slot="' + slotIdx + '"]');
+      if (el) paintCell(el, slotIdx);
+      pushLabels();
+    }
+
+    document.addEventListener("keydown", (e) => {
+      const key = KEY_MAP[e.key];
+      if (!key || hovered === null) return;
+      e.preventDefault();
+      apply(hovered, key);
+    });
+
+    function render(args) {
+      const root = document.getElementById("root");
+      labels = (args.labels || []).slice();
+      layout = args.layout || [];
+      if (args.label_colors) {
+        colors = {};
+        for (const [k, rgb] of Object.entries(args.label_colors)) {
+          colors[k] = "rgb(" + rgb[0] + "," + rgb[1] + "," + rgb[2] + ")";
+        }
+      }
+
+      root.innerHTML = "";
+      const grid = document.createElement("div");
+      grid.className = "grid";
+
+      layout.forEach((item) => {
+        const cell = document.createElement("div");
+        cell.className = "cell";
+        cell.dataset.slot = String(item.index);
+        const num = document.createElement("div");
+        num.className = "num";
+        num.textContent = String(item.index);
+        const lbl = document.createElement("div");
+        lbl.className = "lbl";
+        cell.appendChild(num);
+        cell.appendChild(lbl);
+        paintCell(cell, item.index);
+        cell.addEventListener("mouseenter", () => {
+          hovered = item.index;
+          cell.classList.add("hover");
+        });
+        cell.addEventListener("mouseleave", () => {
+          if (hovered === item.index) hovered = null;
+          cell.classList.remove("hover");
+        });
+        grid.appendChild(cell);
+      });
+
+      root.appendChild(grid);
+      const hint = document.createElement("div");
+      hint.className = "hint";
+      hint.innerHTML =
+        "Feld fahren → <kbd>1</kbd> voll · <kbd>2</kbd> leer · <kbd>3</kbd> nada (speichert sofort)";
+      root.appendChild(hint);
+      Streamlit.setFrameHeight(320);
+    }
+
+    Streamlit.events.addEventListener(Streamlit.RENDER_EVENT, (e) => render(e.detail.args));
+    Streamlit.setComponentReady();
+    Streamlit.setFrameHeight(320);
+  </script>
+</body>
+</html>
