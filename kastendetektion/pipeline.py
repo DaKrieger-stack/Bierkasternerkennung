@@ -20,6 +20,7 @@ from kastendetektion.slot_classifier import Method as SlotMethod
 from kastendetektion.slot_classifier import SlotOccupancyClassifier
 from kastendetektion.states import SlotState
 from kastendetektion.warp_grid import (
+    estimate_slot_half_size,
     extract_slot_roi,
     grid_slot_centers,
     map_points_to_original,
@@ -118,11 +119,13 @@ class CratePipeline:
         warped, h_mat = warp_crate_top_down(
             frame_bgr, det.corners, out_width=self.out_width, out_height=self.out_height
         )
-        centers = grid_slot_centers(self.out_width, self.out_height, rows=self.rows, cols=self.cols)
-
-        cell_w = self.out_width / float(self.cols)
-        cell_h = self.out_height / float(self.rows)
-        half = max(8, int(min(cell_w, cell_h) * 0.4))
+        centers = grid_slot_centers(
+            self.out_width,
+            self.out_height,
+            rows=self.rows,
+            cols=self.cols,
+        )
+        half = estimate_slot_half_size(centers, self.rows, self.cols)
 
         rois: list[np.ndarray | None] = [
             extract_slot_roi(warped, float(cx), float(cy), half_size=half) for cx, cy in centers

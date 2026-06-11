@@ -112,7 +112,7 @@ def train_roi_classifier(
             loss = loss_fn(out, y)
             loss.backward()
             opt.step()
-            total_loss += float(loss) * len(y)
+            total_loss += float(loss.detach()) * len(y)
 
         model.eval()
         correct = 0

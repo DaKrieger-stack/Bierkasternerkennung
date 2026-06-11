@@ -16,6 +16,7 @@ from kastendetektion.slot_classifier import (
 from kastendetektion.stabilize import SlotStateStabilizer
 from kastendetektion.states import SlotState, color_for, label_for
 from kastendetektion.warp_grid import (
+    canonicalize_corners_for_grid,
     extract_slot_roi,
     grid_slot_centers,
     map_points_to_original,
@@ -29,6 +30,7 @@ __all__ = [
     "detect_crate_contour",
     "draw_detection",
     # Warp / Grid
+    "canonicalize_corners_for_grid",
     "warp_crate_top_down",
     "grid_slot_centers",
     "map_points_to_original",
