@@ -28,11 +28,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Stufe-1 Slot-CNN trainieren")
     parser.add_argument("--dataset", type=Path, default=ROOT / "data/slot_dataset")
     parser.add_argument("--out", type=Path, default=ROOT / "models/slot_cnn.pt")
-    parser.add_argument("--arch", choices=["smallcnn", "mobilenet_v2"], default="smallcnn")
+    parser.add_argument("--arch", choices=["smallcnn", "mobilenet_v2"], default="mobilenet_v2")
     parser.add_argument("--input-size", type=int, default=64)
-    parser.add_argument("--epochs", type=int, default=20)
+    parser.add_argument("--epochs", type=int, default=40)
     parser.add_argument("--batch-size", type=int, default=32)
-    parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--lr", type=float, default=5e-4)
     parser.add_argument("--device", default="")
     args = parser.parse_args()
 
@@ -53,6 +53,10 @@ def main() -> None:
         batch_size=args.batch_size,
         lr=args.lr,
         device=args.device,
+        augment=True,
+        class_weights=True,
+        focus_class=SLOT_CLASSES.index("empty"),
+        min_recall_weight=0.5,
     )
 
 

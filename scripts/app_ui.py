@@ -26,6 +26,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from kastendetektion.inference_config import ACTIVE, ORIGINAL, StateInferenceParams  # noqa: E402
 from kastendetektion.overlay import draw_pipeline_overlay  # noqa: E402
 from kastendetektion.pipeline import CratePipeline  # noqa: E402
 from kastendetektion.states import label_for  # noqa: E402
@@ -44,17 +45,46 @@ def _bgr_to_rgb(img: np.ndarray) -> np.ndarray:
 def main() -> None:
     st.set_page_config(page_title="Bierkasten-Füllzustand", layout="wide")
     st.title("Bierkasten-Füllzustand – Bedien-UI")
-    st.caption("Detektion (YOLO/Kontur) + Stufe 1 (Slot) + Stufe 2 (Kronkorken) → Overlay & Statistik")
+    st.caption("Detektion (YOLO/Kontur) + 3-Klassen-KI (nada/leer/voll) → Overlay & Statistik")
 
     with st.sidebar:
         st.header("Methoden")
         contour_only = st.checkbox("Nur Kontur statt YOLO (keine Gewichte)", value=False)
-        slot_method = st.selectbox("Stufe 1 – Slot", ["auto", "classical", "ml"], index=1)
-        cap_method = st.selectbox("Stufe 2 – Kronkorken", ["auto", "classical", "ml"], index=1)
+        state_method = st.selectbox(
+            "Zustand (nada/leer/voll)",
+            ["auto", "classical", "ml"],
+            index=0,
+            help="auto nutzt models/state_cnn.pt (alle 3 Klassen trainiert)",
+        )
+        slot_method = st.selectbox("Stufe 1 – Slot (Fallback)", ["auto", "classical", "ml"], index=0)
+        cap_method = st.selectbox("Stufe 2 – Kronkorken (Fallback)", ["auto", "classical", "ml"], index=0)
         conf = st.slider("YOLO-Konfidenz", 0.05, 0.95, 0.25, 0.05)
+
+        st.header("Inferenz-Tuning (nada/voll)")
+        use_original = st.checkbox("Original-Schwellwerte (vor Tuning)", value=False)
+        slot_occ_thr = st.slider("Slot belegt ab", 0.40, 0.75, 0.58, 0.01)
+        full_min = st.slider("Voll min. Konfidenz", 0.40, 0.80, 0.58, 0.01)
+        empty_nada_thr = st.slider("Nada wenn p(empty) ≥", 0.20, 0.60, 0.32, 0.01)
+        st.caption("Original: Slot 0.50, Voll 0.50, p(empty) 0.45, Fallback p_bf≥p_be→voll")
+
+        infer_params = (
+            ORIGINAL
+            if use_original
+            else StateInferenceParams(
+                p_empty_nada=empty_nada_thr,
+                full_min=full_min,
+                empty_min=0.45,
+                empty_vs_full_margin=0.12,
+                p_empty_strong=0.38,
+                slot_low_conf=0.68,
+                p_empty_soft=0.15,
+                default_missing=True,
+            )
+        )
 
         st.header("Gewichte (optional)")
         yolo_w = st.text_input("YOLO best.pt", os.environ.get("KASTEN_YOLO_WEIGHTS", ""))
+        state_w = st.text_input("State-CNN .pt", os.environ.get("KASTEN_STATE_WEIGHTS", ""))
         slot_w = st.text_input("Slot-CNN .pt", os.environ.get("KASTEN_SLOT_WEIGHTS", ""))
         cap_w = st.text_input("Cap-CNN .pt", os.environ.get("KASTEN_CAP_WEIGHTS", ""))
 
@@ -76,13 +106,17 @@ def main() -> None:
         return
 
     pipe = CratePipeline(
+        state_method=state_method,
         slot_method=slot_method,
         cap_method=cap_method,
         weights_path=(yolo_w.strip() or None) if not contour_only else None,
         prefer_yolo=not contour_only,
         conf=conf,
+        state_weights=state_w.strip() or None,
         slot_weights=slot_w.strip() or None,
         cap_weights=cap_w.strip() or None,
+        state_inference_params=infer_params,
+        slot_occupied_threshold=slot_occ_thr,
     )
     analysis = pipe.analyze(frame)
 
@@ -93,9 +127,13 @@ def main() -> None:
 
     overlay = draw_pipeline_overlay(frame, analysis)
 
+    mode = (
+        f"3-Klassen: {pipe.state_clf.active_method} + Slot: {pipe.slot_clf.active_method}"
+        if pipe.state_clf.active_method == "ml"
+        else f"Stufe 1/2: {pipe.slot_clf.active_method}/{pipe.cap_clf.active_method}"
+    )
     st.success(
-        f"Detektion: {analysis.detection.source} (conf {analysis.detection.confidence:.2f}) | "
-        f"Stufe 1/2: {pipe.slot_clf.active_method}/{pipe.cap_clf.active_method}"
+        f"Detektion: {analysis.detection.source} (conf {analysis.detection.confidence:.2f}) | {mode}"
     )
 
     c1, c2, c3, c4 = st.columns(4)

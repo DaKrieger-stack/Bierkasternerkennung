@@ -21,6 +21,8 @@ from typing import Any, Literal
 import cv2
 import numpy as np
 
+from kastendetektion.inference_config import get_slot_occupied_threshold
+
 logger = logging.getLogger(__name__)
 
 Method = Literal["classical", "ml", "auto"]
@@ -97,11 +99,19 @@ def _resolve_weights(explicit: str | Path | None, env_var: str, defaults: tuple[
 class _TorchRoiClassifier:
     """Dünner Inferenz-Wrapper um ein ROI-Klassifikationsmodell (lazy torch)."""
 
-    def __init__(self, weights: Path, positive_class: str, device: str = "cpu") -> None:
+    def __init__(
+        self,
+        weights: Path,
+        positive_class: str,
+        device: str = "cpu",
+        *,
+        pos_threshold: float = 0.5,
+    ) -> None:
         from kastendetektion.ml_models import load_checkpoint
 
         self.model, self.classes, self.input_size = load_checkpoint(str(weights), device=device)
         self.device = device
+        self.pos_threshold = pos_threshold
         if positive_class in self.classes:
             self._pos_idx = self.classes.index(positive_class)
         else:
@@ -130,7 +140,7 @@ class _TorchRoiClassifier:
                 probs = torch.softmax(logits, dim=1).cpu().numpy()
             for k, i in enumerate(valid_idx):
                 p_pos = float(probs[k, self._pos_idx])
-                results[i] = (p_pos >= 0.5, p_pos)
+                results[i] = (p_pos >= self.pos_threshold, p_pos)
 
         for i in range(len(rois_bgr)):
             out.append(results.get(i, (False, 0.0)))
@@ -146,10 +156,12 @@ class SlotOccupancyClassifier:
         *,
         weights_path: str | Path | None = None,
         device: str = "cpu",
+        occupied_threshold: float | None = None,
     ) -> None:
         self.method: Method = method
         self._ml: _TorchRoiClassifier | None = None
         self.active_method: Method = "classical"
+        occ_thr = occupied_threshold if occupied_threshold is not None else get_slot_occupied_threshold()
 
         weights = _resolve_weights(
             weights_path,
@@ -159,7 +171,9 @@ class SlotOccupancyClassifier:
         want_ml = method in ("ml", "auto")
         if want_ml and weights is not None:
             try:
-                self._ml = _TorchRoiClassifier(weights, _POSITIVE_CLASS, device=device)
+                self._ml = _TorchRoiClassifier(
+                    weights, _POSITIVE_CLASS, device=device, pos_threshold=occ_thr
+                )
                 self.active_method = "ml"
             except Exception:
                 logger.exception("Slot-ML-Modell konnte nicht geladen werden, nutze klassisch.")

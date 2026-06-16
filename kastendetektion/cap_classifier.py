@@ -116,7 +116,10 @@ class CapClassifier:
         want_ml = method in ("ml", "auto")
         if want_ml and weights is not None:
             try:
-                self._ml = _TorchRoiClassifier(weights, _POSITIVE_CLASS, device=device)
+                # Höhere Schwelle: „voll“ nur bei sicherer Evidenz → weniger leere als voll.
+                self._ml = _TorchRoiClassifier(
+                    weights, _POSITIVE_CLASS, device=device, pos_threshold=0.58
+                )
                 self.active_method = "ml"
             except Exception:
                 logger.exception("Cap-ML-Modell konnte nicht geladen werden, nutze klassisch.")

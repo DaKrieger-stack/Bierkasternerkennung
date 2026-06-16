@@ -18,6 +18,9 @@ from kastendetektion.cap_classifier import Method as CapMethod
 from kastendetektion.detector import CrateDetectionResult, detect_crate
 from kastendetektion.slot_classifier import Method as SlotMethod
 from kastendetektion.slot_classifier import SlotOccupancyClassifier
+from kastendetektion.state_classifier import Method as StateMethod
+from kastendetektion.state_classifier import StateClassifier
+from kastendetektion.inference_config import StateInferenceParams, get_slot_occupied_threshold
 from kastendetektion.states import SlotState
 from kastendetektion.warp_grid import (
     estimate_slot_half_size,
@@ -85,6 +88,7 @@ class CratePipeline:
         *,
         slot_method: SlotMethod = "auto",
         cap_method: CapMethod = "auto",
+        state_method: StateMethod = "auto",
         rows: int = 4,
         cols: int = 5,
         out_width: int = 500,
@@ -94,7 +98,10 @@ class CratePipeline:
         conf: float = 0.25,
         slot_weights: str | Path | None = None,
         cap_weights: str | Path | None = None,
+        state_weights: str | Path | None = None,
         device: str = "cpu",
+        state_inference_params: StateInferenceParams | None = None,
+        slot_occupied_threshold: float | None = None,
     ) -> None:
         self.rows = rows
         self.cols = cols
@@ -103,7 +110,24 @@ class CratePipeline:
         self.weights_path = weights_path
         self.prefer_yolo = prefer_yolo
         self.conf = conf
-        self.slot_clf = SlotOccupancyClassifier(slot_method, weights_path=slot_weights, device=device)
+        occ_thr = (
+            slot_occupied_threshold
+            if slot_occupied_threshold is not None
+            else get_slot_occupied_threshold()
+        )
+        self.state_clf = StateClassifier(
+            state_method,
+            weights_path=state_weights,
+            device=device,
+            inference_params=state_inference_params,
+            slot_occupied_threshold=occ_thr,
+        )
+        self.slot_clf = SlotOccupancyClassifier(
+            slot_method,
+            weights_path=slot_weights,
+            device=device,
+            occupied_threshold=occ_thr,
+        )
         self.cap_clf = CapClassifier(cap_method, weights_path=cap_weights, device=device)
 
     def analyze(self, frame_bgr: np.ndarray) -> CrateAnalysis | None:
@@ -131,45 +155,65 @@ class CratePipeline:
             extract_slot_roi(warped, float(cx), float(cy), half_size=half) for cx, cy in centers
         ]
 
-        # Stufe 1: Belegung je Slot.
-        slot_preds = self.slot_clf.predict([r if r is not None else np.zeros((1, 1, 3), np.uint8) for r in rois])
-
-        # Stufe 2: Kronkorken nur für belegte Slots (für leere/None: neutral).
-        cap_input: list[np.ndarray] = []
-        cap_map: list[int] = []  # slot-index je cap_input-Eintrag
-        for i, (roi, (occ, _)) in enumerate(zip(rois, slot_preds)):
-            if occ and roi is not None:
-                cap_input.append(roi)
-                cap_map.append(i)
-        cap_preds_raw = self.cap_clf.predict(cap_input) if cap_input else []
-        cap_by_slot: dict[int, tuple[bool, float]] = {cap_map[k]: cap_preds_raw[k] for k in range(len(cap_map))}
-
-        # Rückprojektion aller Mittelpunkte ins Originalbild.
+        roi_batch = [r if r is not None else np.zeros((1, 1, 3), np.uint8) for r in rois]
         centers_orig = map_points_to_original(h_mat, centers)
 
         slots: list[SlotResult] = []
-        for i, (cx, cy) in enumerate(centers):
-            row, col = divmod(i, self.cols)
-            occupied, slot_conf = slot_preds[i]
-            if not occupied:
-                state = SlotState.MISSING
-                cap_conf = 0.0
-            else:
-                has_cap, cap_conf = cap_by_slot.get(i, (False, 0.0))
-                state = SlotState.FULL if has_cap else SlotState.EMPTY
-            ox, oy = centers_orig[i]
-            slots.append(
-                SlotResult(
-                    index=i,
-                    row=row,
-                    col=col,
-                    center_warped=(float(cx), float(cy)),
-                    center_orig=(float(ox), float(oy)),
-                    state=state,
-                    slot_conf=float(slot_conf),
-                    cap_conf=float(cap_conf),
+        if self.state_clf.active_method == "ml":
+            slot_preds = self.slot_clf.predict(roi_batch)
+            state_preds = self.state_clf.predict(roi_batch, slot_gates=slot_preds)
+            for i, (cx, cy) in enumerate(centers):
+                row, col = divmod(i, self.cols)
+                state, conf = state_preds[i]
+                _, slot_conf = slot_preds[i]
+                ox, oy = centers_orig[i]
+                slots.append(
+                    SlotResult(
+                        index=i,
+                        row=row,
+                        col=col,
+                        center_warped=(float(cx), float(cy)),
+                        center_orig=(float(ox), float(oy)),
+                        state=state,
+                        slot_conf=float(slot_conf),
+                        cap_conf=float(conf),
+                    )
                 )
-            )
+        else:
+            slot_preds = self.slot_clf.predict(roi_batch)
+            cap_input: list[np.ndarray] = []
+            cap_map: list[int] = []
+            for i, (roi, (occ, _)) in enumerate(zip(rois, slot_preds)):
+                if occ and roi is not None:
+                    cap_input.append(roi)
+                    cap_map.append(i)
+            cap_preds_raw = self.cap_clf.predict(cap_input) if cap_input else []
+            cap_by_slot: dict[int, tuple[bool, float]] = {
+                cap_map[k]: cap_preds_raw[k] for k in range(len(cap_map))
+            }
+
+            for i, (cx, cy) in enumerate(centers):
+                row, col = divmod(i, self.cols)
+                occupied, slot_conf = slot_preds[i]
+                if not occupied:
+                    state = SlotState.MISSING
+                    cap_conf = 0.0
+                else:
+                    has_cap, cap_conf = cap_by_slot.get(i, (False, 0.0))
+                    state = SlotState.FULL if has_cap else SlotState.EMPTY
+                ox, oy = centers_orig[i]
+                slots.append(
+                    SlotResult(
+                        index=i,
+                        row=row,
+                        col=col,
+                        center_warped=(float(cx), float(cy)),
+                        center_orig=(float(ox), float(oy)),
+                        state=state,
+                        slot_conf=float(slot_conf),
+                        cap_conf=float(cap_conf),
+                    )
+                )
 
         return CrateAnalysis(
             detection=det,
@@ -186,20 +230,24 @@ def analyze_frame(
     *,
     slot_method: SlotMethod = "auto",
     cap_method: CapMethod = "auto",
+    state_method: StateMethod = "auto",
     weights_path: str | Path | None = None,
     prefer_yolo: bool = True,
     conf: float = 0.25,
     rows: int = 4,
     cols: int = 5,
+    state_weights: str | Path | None = None,
 ) -> CrateAnalysis | None:
     """Bequeme Einzelaufruf-Variante (baut die Pipeline intern; für Streams ``CratePipeline`` nutzen)."""
     pipe = CratePipeline(
         slot_method=slot_method,
         cap_method=cap_method,
+        state_method=state_method,
         rows=rows,
         cols=cols,
         weights_path=weights_path,
         prefer_yolo=prefer_yolo,
         conf=conf,
+        state_weights=state_weights,
     )
     return pipe.analyze(frame_bgr)
