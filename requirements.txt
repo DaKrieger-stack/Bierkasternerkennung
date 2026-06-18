@@ -5,6 +5,8 @@ torchvision
 albumentations
 numpy
 streamlit
+streamlit-webrtc
+av
 streamlit-drawable-canvas
 pillow
 tqdm
