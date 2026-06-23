@@ -282,3 +282,8 @@ python scripts/train_yolo.py --cache
 | Bedien-UI (Pipeline) | `streamlit run scripts/app_ui.py` |
 
 Voraussetzung für sinnvolles YOLO: zuerst Daten labeln und trainieren; bis dahin liefert die Pipeline den **Canny-Fallback** für erste Demos.
+
+## Contributors
+@RobinMueller94
+@miascharpf
+@DaKrieger-stack
